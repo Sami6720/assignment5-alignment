@@ -9,12 +9,12 @@ import pickle
 
 #NOTE: HF_DATASETS_OFFLINE=1 # This needs to be set.
 
-split = 'test'
+split = 'train'
 
 ds = load_dataset(
     "jhn9803/hendrycks-math-with-answers",
     split=split,
-    cache_dir="/lustre10/scratch/saminur/hf_cache/"
+    # cache_dir="/lustre10/scratch/saminur/hf_cache/"
 )
 
 
