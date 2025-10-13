@@ -3,6 +3,8 @@ from cs336_alignment.drgrpo_grader import r1_zero_reward_fn
 import pickle
 from vllm import LLM, SamplingParams
 import pprint
+import os
+from datetime import datetime
 
 
 sampling_params = SamplingParams(
@@ -93,3 +95,73 @@ if __name__ == "__main__":
     # print nicely
     print("\n=== Evaluation Summary ===")
     pprint.pprint(results)
+
+
+    results = {
+        "stat_correct_all": stat_correct_all,
+        "stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
+        "stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0,
+        "format_reward_0_cases": [
+            {"prompt": e[1], "response": e[2], "ground_truth": e[3]} for e in format_reward_0_cases
+        ],
+        "format_reward_1_answer_reward_0": [
+            {"prompt": e[1], "response": e[2], "ground_truth": e[3]} for e in format_reward_1_answer_reward_0
+        ],
+        "reward_1_cases": [
+            {"prompt": e[1], "response": e[2], "ground_truth": e[3]} for e in reward_1_cases
+        ],
+    }
+
+    out_dir = "eval_outputs/zero_shot/"
+    os.makedirs(out_dir, exist_ok=True)
+
+    # --- 1) Persist with pickle ---
+    with open(os.path.join(out_dir, "eval_stats.pkl"), "wb") as f:
+        pickle.dump(results, f)
+
+    # --- 2) Markdown report with ground truth included ---
+    report_path = os.path.join(out_dir, "eval_report.md")
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def section(title: str) -> str:
+        return f"\n## {title}\n\n"
+
+    def render_cases(title: str, cases: list[dict]) -> str:
+        lines = [section(f"{title} (N={len(cases)})")]
+        if not cases:
+            lines.append("_No cases._\n")
+            return "".join(lines)
+        for i, c in enumerate(cases, 1):
+            prompt = (c.get("prompt") or "").rstrip()
+            response = (c.get("response") or "").rstrip()
+            gt = (c.get("ground_truth") or "").rstrip()
+            lines.append(f"### Case {i}\n")
+            lines.append("**Prompt**\n\n```text\n" + prompt + "\n```\n\n")
+            lines.append("**Response**\n\n```text\n" + response + "\n```\n\n")
+            lines.append("**Ground Truth**\n\n```text\n" + gt + "\n```\n\n")
+            lines.append("---\n\n")
+        return "".join(lines)
+
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(f"# Evaluation Report\n\n_Generated: {ts}_\n\n")
+        f.write("### Summary Stats\n\n")
+        f.write(f"- **stat_correct_all**: {results['stat_correct_all']}\n")
+        f.write(f"- **stat_format_reward_1_answer_reward_0**: {results['stat_format_reward_1_answer_reward_0']}\n")
+        f.write(f"- **stat_format_reward_0_answer_reward_0**: {results['stat_format_reward_0_answer_reward_0']}\n")
+        f.write(render_cases(
+            "Cases: format_reward == 1 & answer_reward == 0",
+            results["format_reward_1_answer_reward_0"]
+        ))
+        f.write(render_cases(
+            "Cases: format_reward == 0 & answer_reward == 0",
+            results["format_reward_0_cases"]
+        ))
+        f.write(render_cases(
+            "Cases: reward == 1 (correct)",
+            results["reward_1_cases"]
+        ))
+
+    print("✅ Saved:")
+    print(f" - Pickle: {os.path.join(out_dir, 'eval_stats.pkl')}")
+    print(f" - Report: {report_path}")
+
