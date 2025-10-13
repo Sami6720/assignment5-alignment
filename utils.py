@@ -18,12 +18,9 @@ def evaluate_vllm(
 
     # Print the outputs
     reward_and_response_per_prompt = []
-    for output, ground_truth in zip(outputs, ground_truths):
+    for output, ground_truth, prompt in zip(outputs, ground_truths, prompts):
         response = output.outputs[0].text
         reward = reward_fn(response, ground_truth)
-        reward_and_response_per_prompt.append((reward, response))
-        print(reward_and_response_per_prompt)
-        break
-
+        reward_and_response_per_prompt.append((reward, prompt, response))
 
     return reward_and_response_per_prompt

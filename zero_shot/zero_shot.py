@@ -2,6 +2,7 @@ from utils import evaluate_vllm
 from cs336_alignment.drgrpo_grader import r1_zero_reward_fn
 import pickle
 from vllm import LLM, SamplingParams
+import pprint
 
 
 sampling_params = SamplingParams(
@@ -19,18 +20,76 @@ if __name__ == "__main__":
 
 
 
-    llm = LLM(model="/home/saminur/links/scratch/huggingface/hub/hub/models--Qwen--Qwen2.5-Math-1.5B/snapshots/4a83ca6e4526a4f2da3aa259ec36c259f66b2ab2/")
+    llm = LLM(model="Qwen/Qwen2.5-Math-1.5B")
 
     evals = evaluate_vllm(
-        llm, data["problems"][0], data["answers"][0], r1_zero_reward_fn,
-        SamplingParams()
+        llm, data["problems"], data["answers"], r1_zero_reward_fn,
+        sampling_params
         )
+    
+
+    stat_correct_all = 0
+    stat_format_reward_1_answer_reward_0 = 0
+    stat_format_reward_0_answer_reward_0 = 0
+
+    format_reward_0_cases = []
+    format_reward_1_answer_reward_0 = []
+    reward_1_cases = []
+    for eval in evals:
+        reward = eval[0]
+
+        format_reward = reward["format_reward"]
+        answer_reward = reward["answer_reward"]
+        reward = reward["reward"]
+
+
+        if reward == 1 and format_reward == 1 and answer_reward == 1:
+            stat_correct_all += 1
+
+            if len(reward_1_cases) <= 20:
+                reward_1_cases.append(eval)
+
+
+        if format_reward == 1 and answer_reward == 0:
+            stat_format_reward_1_answer_reward_0 += 1
+
+            if len(format_reward_1_answer_reward_0) <= 10:
+                format_reward_1_answer_reward_0.append(eval)
+
+
+        if answer_reward == 0 and format_reward == 0:
+            stat_format_reward_0_answer_reward_0 += 1
+
+            if len(format_reward_0_cases) <= 10:
+                format_reward_0_cases.append(eval)
 
 
 
 
 
+    # collect everything in one dict for easy saving and display
+    results = {
+        "stat_correct_all": stat_correct_all,
+        "stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
+        "stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0,
+        "format_reward_0_cases": format_reward_0_cases,
+        "format_reward_1_answer_reward_0": format_reward_1_answer_reward_0,
+    }
+
+    # persist to pickle
+    with open("eval_stats.pkl", "wb") as f:
+        pickle.dump(results, f)
 
 
+    results = {
+        "stat_correct_all": stat_correct_all,
+        "stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
+        "stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0,
+        "format_reward_0_cases": [('prompt: ' + eval[1], 'response: ' + eval[2]) for eval in format_reward_0_cases],
+        "format_reward_1_answer_reward_0": [('prompt: ' + eval[1], 'response: ' + eval[2]) for eval in format_reward_1_answer_reward_0],
+        "reward_1_cases": [('prompt: ' + eval[1], 'response: ' + eval[2]) for eval in reward_1_cases],
+    }
 
-
+    # print nicely
+    print("\n=== Evaluation Summary ===")
+    pprint.pprint(results)
