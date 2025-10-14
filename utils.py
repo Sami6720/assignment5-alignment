@@ -5,6 +5,8 @@ import os
 import pprint
 import pickle
 from datetime import datetime
+from transformers import PreTrainedTokenizer
+import torch
 
 
 def evaluate_vllm(
@@ -159,3 +161,48 @@ def evalute_results(evals):
     print("✅ Saved:")
     print(f" - Pickle: {os.path.join(out_dir, 'eval_stats.pkl')}")
     print(f" - Report: {report_path}")
+
+
+def tokenize_prompt_and_outputs(prompt_strs: list[str], output_strs: list[str], tokenizer: PreTrainedTokenizer) -> dict[str, torch.Tensor]:
+
+
+    prompt_encoded = tokenizer.batch_encode_plus(prompt_strs)["data"]
+    output_encoded = tokenizer.batch_encode_plus(output_strs)["data"]
+
+    tokens_all = []
+    max_o_p_len = float('-inf')
+    len_p = []
+    len_o = []
+    for i in range(len(output_encoded)):
+
+        p = prompt_encoded[i]
+        len_p.append(len(p))
+
+        o = prompt_encoded[i]
+        len_o.append(len(o))
+        p_o= p + o
+
+        max_o_p_len = max(len(p_o), max_o_p_len)
+
+        tokens_all.append(p)
+
+
+    max_o_p_len = int(max_o_p_len)
+    mask = torch.ones(size=(len(prompt_strs), max_o_p_len))
+
+    for i, m in enumerate(mask):
+
+        m[:len_p[i]] = 0
+        m[len_p[i] + len_o[i] + 1:] = 0
+
+    tokens_all: torch.Tensor = tokenizer.pad(tokens_all).convert_to_tensors()
+
+
+    print(tokens_all.shape)
+
+
+    return {
+        "input_ids": tokens_all[:, :-1],
+        "labels": tokens_all[:, 1:],
+        "response_mask": mask[:, 1:],
+    }
