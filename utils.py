@@ -166,25 +166,28 @@ def evalute_results(evals):
 def tokenize_prompt_and_outputs(prompt_strs: list[str], output_strs: list[str], tokenizer: PreTrainedTokenizer) -> dict[str, torch.Tensor]:
 
 
-    prompt_encoded = tokenizer.batch_encode_plus(prompt_strs)["data"]
-    output_encoded = tokenizer.batch_encode_plus(output_strs)["data"]
+    prompt_encoded = tokenizer.batch_encode_plus(prompt_strs).data["input_ids"]
+    output_encoded = tokenizer.batch_encode_plus(output_strs).data["input_ids"]
+
+
+    # print(prompt_encoded["input_ids"])
 
     tokens_all = []
     max_o_p_len = float('-inf')
     len_p = []
     len_o = []
-    for i in range(len(output_encoded)):
+    for i in range(len(output_strs)):
 
         p = prompt_encoded[i]
         len_p.append(len(p))
 
-        o = prompt_encoded[i]
+        o = output_encoded[i]
         len_o.append(len(o))
         p_o= p + o
 
         max_o_p_len = max(len(p_o), max_o_p_len)
 
-        tokens_all.append(p)
+        tokens_all.append(p_o)
 
 
     max_o_p_len = int(max_o_p_len)
@@ -193,12 +196,15 @@ def tokenize_prompt_and_outputs(prompt_strs: list[str], output_strs: list[str], 
     for i, m in enumerate(mask):
 
         m[:len_p[i]] = 0
-        m[len_p[i] + len_o[i] + 1:] = 0
+        m[len_p[i] + len_o[i]:] = 0
 
-    tokens_all: torch.Tensor = tokenizer.pad(tokens_all).convert_to_tensors()
+    tokens_all: torch.Tensor = tokenizer.pad({"input_ids": tokens_all}).convert_to_tensors().data["input_ids"]
+    tokens_all = torch.Tensor(tokens_all)
 
 
-    print(tokens_all.shape)
+    # print(tokens_all.shape)
+
+    # print(type(tokens_all))
 
 
     return {
