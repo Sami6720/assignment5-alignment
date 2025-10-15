@@ -166,49 +166,40 @@ def evalute_results(evals):
 def tokenize_prompt_and_outputs(prompt_strs: list[str], output_strs: list[str], tokenizer: PreTrainedTokenizer) -> dict[str, torch.Tensor]:
 
 
-    prompt_encoded = tokenizer.batch_encode_plus(prompt_strs).data["input_ids"]
-    output_encoded = tokenizer.batch_encode_plus(output_strs).data["input_ids"]
+
+    resp_token = "<|resp|>"
+
+    prompt_strs_plus_output_strs = []
+
+    for p, o in zip(prompt_strs, output_strs):
+        prompt_strs_plus_output_strs.append(p + resp_token + o)
+
+    tokenizer.add_special_tokens({"additional_special_tokens": [resp_token]})
+    resp_token_id = tokenizer.convert_tokens_to_ids(resp_token)
+
+    all_tokens = tokenizer.batch_encode_plus(prompt_strs_plus_output_strs, add_special_tokens=False, return_tensors='pt', padding=True)["input_ids"]
+
+    mask = all_tokens != resp_token_id
+    tokens = all_tokens[mask].reshape(all_tokens.shape[0], -1)
 
 
-    # print(prompt_encoded["input_ids"])
+    # Mask over input prompts, remove the resp_id column, mask over the padds
+    resp_token_mask  = all_tokens == resp_token_id
+    # cumulative summation returns the same shape before and after
+    # everything before the resp_token_id is the input prompt
+    input_token_mask = torch.cumsum(resp_token_mask, dim=-1)
 
-    tokens_all = []
-    max_o_p_len = float('-inf')
-    len_p = []
-    len_o = []
-    for i in range(len(output_strs)):
+    # padding mask
+    pad_token_id = tokenizer.eos_token_id # Eos tokens are used for padding.
+    pad_token_mask = all_tokens != pad_token_id
+    # The shape of input_token_mask and pad_token_mask are the same.
+    all_token_mask  = pad_token_mask & input_token_mask
 
-        p = prompt_encoded[i]
-        len_p.append(len(p))
-
-        o = output_encoded[i]
-        len_o.append(len(o))
-        p_o= p + o
-
-        max_o_p_len = max(len(p_o), max_o_p_len)
-
-        tokens_all.append(p_o)
-
-
-    max_o_p_len = int(max_o_p_len)
-    mask = torch.ones(size=(len(prompt_strs), max_o_p_len))
-
-    for i, m in enumerate(mask):
-
-        m[:len_p[i]] = 0
-        m[len_p[i] + len_o[i]:] = 0
-
-    tokens_all: torch.Tensor = tokenizer.pad({"input_ids": tokens_all}).convert_to_tensors().data["input_ids"]
-    tokens_all = torch.Tensor(tokens_all)
-
-
-    # print(tokens_all.shape)
-
-    # print(type(tokens_all))
+    response_mask = all_token_mask[mask].reshape(all_token_mask.shape[0], -1)
 
 
     return {
-        "input_ids": tokens_all[:, :-1],
-        "labels": tokens_all[:, 1:],
-        "response_mask": mask[:, 1:],
+        "input_ids": tokens[:, :-1],
+        "labels": tokens[:, 1:],
+        "response_mask": response_mask[:, 1:],
     }
