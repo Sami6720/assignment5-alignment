@@ -5,7 +5,7 @@ import os
 import pprint
 import pickle
 from datetime import datetime
-from transformers import PreTrainedTokenizer
+from transformers import PreTrainedTokenizer, PreTrainedModel
 import torch
 
 
@@ -203,3 +203,38 @@ def tokenize_prompt_and_outputs(prompt_strs: list[str], output_strs: list[str], 
         "labels": tokens[:, 1:],
         "response_mask": response_mask[:, 1:],
     }
+
+
+def per_token_entropy(logits: torch.Tensor):
+    probs = torch.softmax(logits, dim=-1)
+    logsumexp = torch.logsumexp(logits, dim=-1, keepdim=True)
+    mult = logits - logsumexp
+    return -1 * (probs * mult).sum(dim=-1)
+
+
+def get_response_log_probs(
+    model: PreTrainedModel,
+    input_ids: torch.Tensor,
+    labels: torch.Tensor,
+    return_token_entropy: bool):
+
+    ret = {}
+
+
+    logits = model(input_ids).logits # Shape B T V
+
+    if return_token_entropy:
+        ret["token_entropy"] = per_token_entropy(logits) # Shape B T
+
+    logsumexp = torch.logsumexp(logits, dim=-1, keepdim=True) # Shape B T 1
+    log_prob = logits - logsumexp # B T V
+
+    ret["log_probs"] = torch.gather(input=log_prob, index=labels.unsqueeze(-1), dim=-1).squeeze() # B T
+    # index determines the shape of the output.
+    # As you construct the output, you loop over the dims of index
+    # index and input must have the same number of dims. This is just a torch req.
+
+    return ret
+
+
+
