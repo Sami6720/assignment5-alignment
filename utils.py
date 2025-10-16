@@ -238,3 +238,53 @@ def get_response_log_probs(
 
 
 
+def masked_normalize(
+    tensor: torch.Tensor,
+    mask: torch.Tensor,
+    dim: int | None = None,
+    normalize_constant: float = 1.0
+    ):
+
+
+    masked_tensor = tensor * mask
+
+    masked_tensor = masked_tensor.sum(dim=dim)
+
+    return masked_tensor/normalize_constant
+
+
+
+def sft_microbatch_train_step(
+    policy_log_probs: torch.Tensor,
+    response_mask: torch.Tensor,
+    gradient_accumulation_steps: int,
+    normalize_constant: int | None = 1.0,):
+
+    """
+    Lets say you have main batch of size $B$. 
+    Let say you have `gradient_accumulation_step` be $k$.
+
+    Actual $loss = \frac{1}{B}SE_{B}$ per microbatch.
+
+    So the effective batch size would be $\frac{B}{k}$. Let this value be $b$. In other wods, $b = \frac{B}{k}$
+
+    $$total\_loss = \frac{1}{B}\sum^{k}_{i=1}SE_{b}$$
+
+
+    For each `loss.backward()` the loss would be over 
+    $\frac{1}{b}SE_b$
+
+    For $b$ such updates the 
+
+    $$total\_acheived\_loss = \frac{1}{b}\sum^{k}_{i=1}SE_{b}$$
+    $\frac{1}{b}$ appears in all the terms so its moved out of the summation.
+
+    Since $B = b \times k$, we need to divide the total_achieved loss by $k$. This could be distributed to per microbatch $k$ microbatch of size $b$. 
+    """
+
+    B, T = policy_log_probs.shape
+
+    loss = -1 * masked_normalize(policy_log_probs, response_mask, -1, normalize_constant) / gradient_accumulation_steps
+    loss.sum().backward()
+
+    return loss.sum(), {"gradient_accumulation_steps": gradient_accumulation_steps + 1}
