@@ -7,6 +7,7 @@ import pickle
 from datetime import datetime
 from transformers import PreTrainedTokenizer, PreTrainedModel
 import torch
+import wandb
 
 
 def evaluate_vllm(
@@ -31,6 +32,49 @@ def evaluate_vllm(
 
     return reward_and_response_per_prompt
 
+def log_evals_on_wandb(evals):
+
+    stat_correct_all = 0
+    stat_format_reward_1_answer_reward_0 = 0
+    stat_format_reward_0_answer_reward_0 = 0
+
+    format_reward_0_cases = []
+    format_reward_1_answer_reward_0 = []
+    reward_1_cases = []
+    for eval in evals:
+        reward = eval[0]
+
+        format_reward = reward["format_reward"]
+        answer_reward = reward["answer_reward"]
+        reward = reward["reward"]
+
+        if reward == 1 and format_reward == 1 and answer_reward == 1:
+            stat_correct_all += 1
+
+            if len(reward_1_cases) <= 20:
+                reward_1_cases.append(eval)
+
+        if format_reward == 1 and answer_reward == 0:
+            stat_format_reward_1_answer_reward_0 += 1
+
+            if len(format_reward_1_answer_reward_0) <= 10:
+                format_reward_1_answer_reward_0.append(eval)
+
+        if answer_reward == 0 and format_reward == 0:
+            stat_format_reward_0_answer_reward_0 += 1
+
+            if len(format_reward_0_cases) <= 10:
+                format_reward_0_cases.append(eval)
+
+    # collect everything in one dict for easy saving and display
+    results = {
+        "eval/correct": stat_correct_all,
+        "eval/stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
+        "eval/stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0,
+
+    }
+
+    return results
 
 def evalute_results(evals):
 
