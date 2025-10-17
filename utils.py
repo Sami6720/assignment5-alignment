@@ -283,8 +283,76 @@ def sft_microbatch_train_step(
     """
 
     B, T = policy_log_probs.shape
+    #
+    summed_log_nll = -1 * masked_normalize(policy_log_probs, response_mask, -1, normalize_constant)
+    # # loss.sum().backward()
+    # #
+    # # return loss.sum(), {"gradient_accumulation_steps": gradient_accumulation_steps + 1}
+    #
+    #
+    # # Per-example masked sum over response tokens, then divide by the provided constant
+    # per_example_loss = -(policy_log_probs * response_mask).sum(dim=-1) / float(normalize_constant)  # (B,)
 
-    loss = -1 * masked_normalize(policy_log_probs, response_mask, -1, normalize_constant) / gradient_accumulation_steps
-    loss.sum().backward()
+    # What we backprop through: batch **mean**, scaled for grad accumulation. You weren't meaning!
+    loss = summed_log_nll.mean()/ gradient_accumulation_steps  # scalar
 
-    return loss.sum(), {"gradient_accumulation_steps": gradient_accumulation_steps + 1}
+    loss.backward()
+    return loss.item(), {"gradient_accumulation_steps": gradient_accumulation_steps}
+
+
+
+from unittest.mock import patch
+
+import torch
+from transformers import PreTrainedModel
+from vllm import LLM
+from vllm.model_executor import set_random_seed as vllm_set_random_seed
+
+
+def init_vllm(
+    model_id: str,
+    device: str,
+    seed: int,
+    gpu_memory_utilization: float = 0.85,
+) -> LLM:
+    """
+    Start the inference process; use vLLM to hold a model on a GPU separate from the policy.
+
+    Applies two patches (following TRL) to:
+      (1) force world size to 1 so we can place the vLLM model on the desired device, and
+      (2) bypass a profiling check not designed for this setting.
+    """
+    vllm_set_random_seed(seed)
+
+    # Monkey patches adapted from:
+    # https://github.com/huggingface/trl/blob/22759c820867c8659d00082ba8cf004e963873c1/trl/trainer/grpo_trainer.py
+    world_size_patch = patch("torch.distributed.get_world_size", return_value=1)
+    profiling_patch = patch(
+        "vllm.worker.worker.Worker._assert_memory_footprint_increased_during_profiling",
+        return_value=None,
+    )
+
+    with world_size_patch, profiling_patch:
+        #TODO: Maybe I need to add SamplingParams here.
+        return LLM(
+            model=model_id,
+            device=device,
+            dtype=torch.bfloat16,
+            enable_prefix_caching=True,
+            gpu_memory_utilization=gpu_memory_utilization,
+        )
+
+
+def load_policy_into_vllm_instance(policy: PreTrainedModel, llm: LLM) -> None:
+    """
+    Load a Hugging Face `policy` state_dict into an existing vLLM `llm` instance.
+
+    Based on:
+    https://github.com/huggingface/trl/blob/22759c820867c8659d00082ba8cf004e963873c1/trl/trainer/grpo_trainer.py#L670
+    """
+    state_dict = policy.state_dict()
+    llm_model = (
+        llm.llm_engine.model_executor.driver_worker.model_runner.model  # type: ignore[attr-defined]
+    )
+    llm_model.load_weights(state_dict.items())
+
