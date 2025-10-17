@@ -4,12 +4,16 @@ from vllm import LLM, SamplingParams
 from torch.utils.data import Dataset, DataLoader
 import pickle
 from argparse import ArgumentParser
-from utils import tokenize_prompt_and_outputs, get_response_log_probs, sft_microbatch_train_step, evaluate_vllm, init_vllm, load_policy_into_vllm_instance
-from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForCausalLM
+from utils import tokenize_prompt_and_outputs, get_response_log_probs, sft_microbatch_train_step, evaluate_vllm, init_vllm, load_policy_into_vllm_instance, log_evals_on_wandb
+from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForCausalLM, set_seed
+from vllm.model_executor import set_random_seed as vllm_set_random_seed
 from functools import partial
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from torch.optim import AdamW
 from transformers.models.qwen2.modeling_qwen2 import Qwen2ForCausalLM
+import wandb
+import numpy as np
+import random
 
 
 
@@ -68,9 +72,23 @@ if __name__ == '__main__':
     parser.add_argument("--seed", type=int, default=0)
 
 
-    #TODO: Set the seeds. Maybe the DataLoader seed also needs to be set?
 
     args = parser.parse_args()
+
+    wandb.init(
+        entity="doina-precup",
+        project="cs-336-assignment-5",
+        name=args.job_name,
+        mode='online',
+        save_code=True
+    )
+    wandb.define_metric("train_step") # the x‐axis for training 
+    wandb.define_metric("eval_step") # the x‐axis for evaluation
+    wandb.define_metric("train/*", step_metric="train_step")
+    wandb.define_metric("eval/*", step_metric="eval_step")
+
+    set_seed(args.seed)
+    vllm_set_random_seed(args.seed) # NOTE: Probably not needed.
 
     data = SftDataset('preprocessed_data/MATH/sft/preprocessed_train.pkl')
     with open("preprocessed_data/MATH/preprocessed_test.pkl", "rb") as f:
@@ -87,7 +105,8 @@ if __name__ == '__main__':
         top_p=1.0,
         max_tokens=1024,
         stop=["</answer>"],
-        include_stop_str_in_output=True
+        include_stop_str_in_output=True,
+        seed=args.seed
     )
 
 
@@ -100,15 +119,31 @@ if __name__ == '__main__':
         model.parameters(), lr=args.lr, weight_decay=0.0, betas=(0.9, 0.95)
     )
 
+
+    def worker_init_fn(worker_id):
+        # Recommended: derive from torch’s per-worker seed
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+    g = torch.Generator()
+    g.manual_seed(args.seed)
     datal = DataLoader(
         dataset=data,
         shuffle=True,
         batch_size=args.micro_batch_size,
-        collate_fn=make_collate_fn(tokenizer)
+        collate_fn=make_collate_fn(tokenizer),
+        worker_init_fn=worker_init_fn,
+        generator=g
     )
 
 
+    global_training_step = 0
+    global_eval_step = 0
+
+
     for epoch in range(args.epochs):
+
+        print("Len of datal ", len(datal))
 
         for i, d in enumerate(datal):
 
@@ -123,7 +158,11 @@ if __name__ == '__main__':
             token_entropy = ret["token_entropy"]
 
             loss, meta_data = sft_microbatch_train_step(log_probs, response_mask, gradient_accumulation_steps=gradient_accumulation_steps)
-            print(f"Iter: {i}, Loss: {loss}")
+
+            wandb.log({
+                "train_step": global_training_step,
+                "train/loss": loss
+            })
 
             if (i + 1) % gradient_accumulation_steps == 0:
                 optimizer.step()
@@ -138,9 +177,17 @@ if __name__ == '__main__':
                     sampling_params
                     )
 
+                eval_res = log_evals_on_wandb(evals)
+                wandb.log({
+                    "eval_step": global_eval_step,
+                    **eval_res
+                })
+                global_eval_step += 1
+
 
 
             # evaluate_vllm(
+            global_training_step += 1
 
 
 
@@ -148,3 +195,13 @@ if __name__ == '__main__':
     tokenizer.save_pretrained(save_directory=f"models/{args.job_name}/final/")
 
 
+    evals = evaluate_vllm(
+        llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
+        sampling_params
+        )
+
+    eval_res = log_evals_on_wandb(evals)
+    wandb.log({
+        "eval_step": global_eval_step,
+        **eval_res
+    })
