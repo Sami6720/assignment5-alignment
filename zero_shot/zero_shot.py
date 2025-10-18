@@ -5,6 +5,7 @@ from vllm import LLM, SamplingParams
 import pprint
 import os
 from datetime import datetime
+import torch
 
 
 sampling_params = SamplingParams(
@@ -22,7 +23,12 @@ if __name__ == "__main__":
 
 
 
-    llm = LLM(model="Qwen/Qwen2.5-Math-1.5B")
+    llm = LLM(model="Qwen/Qwen2.5-Math-1.5B",
+              device='cuda:1',
+            dtype=torch.bfloat16,
+            enable_prefix_caching=True,
+            gpu_memory_utilization=0.85,
+          )
 
     evals = evaluate_vllm(
         llm, data["problems"], data["answers"], r1_zero_reward_fn,
