@@ -4,7 +4,7 @@ from vllm import LLM, SamplingParams
 from torch.utils.data import Dataset, DataLoader
 import pickle
 from argparse import ArgumentParser
-from utils import tokenize_prompt_and_outputs, get_response_log_probs, sft_microbatch_train_step, evaluate_vllm, init_vllm, load_policy_into_vllm_instance, log_evals_on_wandb
+from utils import tokenize_prompt_and_outputs, get_response_log_probs, sft_microbatch_train_step, evaluate_vllm, init_vllm, load_policy_into_vllm_instance, log_evals_on_wandb, evalute_results
 from transformers import PreTrainedTokenizer, AutoTokenizer, AutoModelForCausalLM, set_seed
 from vllm.model_executor import set_random_seed as vllm_set_random_seed
 from functools import partial
@@ -110,6 +110,12 @@ if __name__ == '__main__':
     )
 
 
+    load_policy_into_vllm_instance(model, llm)
+    evals = evaluate_vllm(
+        llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
+        sampling_params
+    )
+    report_path = evalute_results(evals)
 
     assert args.batch_size % args.micro_batch_size == 0
 
@@ -195,6 +201,7 @@ if __name__ == '__main__':
     tokenizer.save_pretrained(save_directory=f"models/{args.job_name}/final/")
 
 
+    load_policy_into_vllm_instance(model, llm)
     evals = evaluate_vllm(
         llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
         sampling_params
@@ -205,3 +212,5 @@ if __name__ == '__main__':
         "eval_step": global_eval_step,
         **eval_res
     })
+    report_path = evalute_results(evals)
+    wandb.save(report_path)
