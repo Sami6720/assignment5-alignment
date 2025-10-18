@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     parser = ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=128)
-    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--micro_batch_size", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--eval_interval", type=int, default=100)
