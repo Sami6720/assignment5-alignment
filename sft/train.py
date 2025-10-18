@@ -158,10 +158,12 @@ if __name__ == '__main__':
 
             loss, meta_data = sft_microbatch_train_step(log_probs, response_mask, gradient_accumulation_steps=gradient_accumulation_steps)
 
-            wandb.log({
-                "train_step": global_training_step,
-                "train/loss": loss
-            })
+            if global_training_step % 25 == 0:
+                wandb.log({
+                    "train_step": global_training_step,
+                    "train/loss": loss,
+                    "train/response_mean_token_entropy": (response_mask * token_entropy).mean().item()
+                })
 
             if (i + 1) % gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
