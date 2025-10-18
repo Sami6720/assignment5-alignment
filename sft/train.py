@@ -152,7 +152,15 @@ if __name__ == '__main__':
                     dtype=int).tolist()
     )
 
+
+    print("Total updates: ", total_updates)
+    print("Eval update points: ", eval_update_points)
+
     update_step = 0  # counts optimizer.step() calls
+
+    # reward_0_table = wandb.Table(columns=["eval_step", "prompt", "response"])
+    # format_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
+    # reward_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
     for epoch in range(args.epochs):
 
         print("Len of datal ", len(datal))
@@ -190,11 +198,22 @@ if __name__ == '__main__':
                         llm, eval_data["problems"], eval_data["answers"],
                         r1_zero_reward_fn, sampling_params
                     )
-                    eval_res, reward_0, format_1, reward_1 = log_evals_on_wandb(evals)
-                    reward_0 = wandb.Table(columns=["prompt", "response"], data=reward_0)
-                    format_1 = wandb.Table(columns=["prompt", "response"], data=format_1)
-                    reward_1 = wandb.Table(columns=["prompt", "response"], data=reward_1)
-                    wandb.log({"eval_step": global_eval_step, **eval_res, "reward_0_cases": reward_0, "reward_1_cases": reward_1, "format_1_cases": format_1})
+                    eval_res = log_evals_on_wandb(evals)
+
+                    # Append to reward_0 table
+                    # for p, r in reward_0:
+                    #         reward_0_table.add_data(global_eval_step, p, r)
+                    #
+                    # # Append to format_1 table
+                    # for p, r in format_1:
+                    #         format_1_table.add_data(global_eval_step, p, r)
+                    #
+                    # # Append to reward_1 table
+                    # for p, r in reward_1:
+                    #         reward_1_table.add_data(global_eval_step, p, r)
+
+                    # wandb.log({"eval_step": global_eval_step, **eval_res, "reward_0_cases": reward_0_table, "reward_1_cases": reward_1_table, "format_1_cases": format_1_table})
+                    wandb.log({"eval_step": global_eval_step, **eval_res})
                     global_eval_step += 1
 
                 update_step += 1
@@ -214,7 +233,7 @@ if __name__ == '__main__':
         sampling_params
         )
 
-    eval_res, reward_0, format_1, reward_1 = log_evals_on_wandb(evals)
+    eval_res = log_evals_on_wandb(evals)
     wandb.log({
         "eval_step": global_eval_step,
         **eval_res

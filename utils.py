@@ -67,13 +67,30 @@ def log_evals_on_wandb(evals):
                 format_reward_0_cases.append(eval)
 
     # collect everything in one dict for easy saving and display
+    stat_correct_all /= len(evals) * 100
+    stat_format_reward_1_answer_reward_0 /= len(evals) * 100
+    stat_format_reward_0_answer_reward_0 /= len(evals) * 100
+
     results = {
-        "eval/correct": stat_correct_all / len(evals) * 100,
-        "eval/stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0 / len(evals) * 100,
-        "eval/stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0 / len(evals) * 100,
+        "stat_correct_all": stat_correct_all,
+        "stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
+        "stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0,
+        "format_reward_0_cases": [('prompt: ' + eval[1], 'response: ' + eval[2]) for eval in format_reward_0_cases],
+        "format_reward_1_answer_reward_0": [('prompt: ' + eval[1], 'response: ' + eval[2]) for eval in format_reward_1_answer_reward_0],
+        "reward_1_cases": [('prompt: ' + eval[1], 'response: ' + eval[2]) for eval in reward_1_cases],
     }
 
-    return ( results, [(eval[1], eval[2]) for eval in format_reward_0_cases], [(eval[1],  eval[2]) for eval in format_reward_1_answer_reward_0], [(eval[1],  eval[2]) for eval in reward_1_cases])
+    print("\n=== Evaluation Summary ===")
+    pprint.pprint(results)
+
+
+    results = {
+        "eval/stat_correct_all": stat_correct_all,
+        "eval/stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
+        "eval/stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0,
+    }
+
+    return results
 
 
 
@@ -260,11 +277,6 @@ def get_response_log_probs(
     return_token_entropy: bool):
 
     ret = {}
-
-
-    print("input_ids.shape ", input_ids.shape)
-
-
     logits = model(input_ids).logits # Shape B T V
 
     if return_token_entropy:
