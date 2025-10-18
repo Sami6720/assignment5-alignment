@@ -171,6 +171,7 @@ if __name__ == '__main__':
             })
 
             if (i + 1) % gradient_accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
                 optimizer.step()
                 optimizer.zero_grad()
 
