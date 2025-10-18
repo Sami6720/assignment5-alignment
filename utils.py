@@ -51,7 +51,7 @@ def log_evals_on_wandb(evals):
         if reward == 1 and format_reward == 1 and answer_reward == 1:
             stat_correct_all += 1
 
-            if len(reward_1_cases) <= 20:
+            if len(reward_1_cases) <= 10:
                 reward_1_cases.append(eval)
 
         if format_reward == 1 and answer_reward == 0:
@@ -68,13 +68,12 @@ def log_evals_on_wandb(evals):
 
     # collect everything in one dict for easy saving and display
     results = {
-        "eval/correct": stat_correct_all / len(evals),
-        "eval/stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0 / len(evals),
-        "eval/stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0 / len(evals),
+        "eval/correct": stat_correct_all / len(evals) * 100,
+        "eval/stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0 / len(evals) * 100,
+        "eval/stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0 / len(evals) * 100,
     }
 
-    return results, [(eval[1], eval[2]) for eval in format_reward_0_cases], [(eval[1],  eval[2]) for eval in format_reward_1_answer_reward_0],
-    [(eval[1],  eval[2]) for eval in reward_1_cases]
+    return ( results, [(eval[1], eval[2]) for eval in format_reward_0_cases], [(eval[1],  eval[2]) for eval in format_reward_1_answer_reward_0], [(eval[1],  eval[2]) for eval in reward_1_cases])
 
 
 
@@ -114,9 +113,9 @@ def evalute_results(evals, out_dir="eval_outputs/zero_shot/"):
 
 
 
-    stat_correct_all /= len(evals)
-    stat_format_reward_1_answer_reward_0 /= len(evals)
-    stat_format_reward_0_answer_reward_0 /= len(evals)
+    stat_correct_all /= len(evals) * 100
+    stat_format_reward_1_answer_reward_0 /= len(evals) * 100
+    stat_format_reward_0_answer_reward_0 /= len(evals) * 100
 
     results = {
         "stat_correct_all": stat_correct_all,
