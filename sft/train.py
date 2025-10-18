@@ -167,6 +167,8 @@ if __name__ == '__main__':
 
         print("Len of datal ", len(datal))
 
+        batch_loss = []
+        batch_token_entropy = []
 
         for i, d in enumerate(datal):
 
@@ -182,17 +184,25 @@ if __name__ == '__main__':
 
             loss, meta_data = sft_microbatch_train_step(log_probs, response_mask, gradient_accumulation_steps=gradient_accumulation_steps)
 
-            if global_training_step % 25 == 0:
-                wandb.log({
-                    "train_step": global_training_step,
-                    "train/loss": loss,
-                    "train/response_mean_token_entropy": (response_mask * token_entropy).mean().item()
-                })
+            batch_loss.append(loss)
+            batch_token_entropy.append((response_mask * token_entropy).mean().item())
+
 
             if (i + 1) % gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
                 optimizer.step()
                 optimizer.zero_grad()
+
+                if update_step % 5 == 0:
+                    print("Get to logging training stuff")
+                    wandb.log({
+                        "train_step": update_step,
+                        "train/loss": sum(batch_loss)/len(batch_loss),
+                        "train/response_mean_token_entropy": sum(batch_token_entropy)/len(batch_token_entropy)
+                    })
+
+                batch_loss = [] # Reset batch loss.
+                batch_token_entropy = [] 
 
                 # evenly spaced evals (at most 15 during training)
                 if update_step in eval_update_points:
@@ -202,7 +212,7 @@ if __name__ == '__main__':
                         llm, eval_data["problems"], eval_data["answers"],
                         r1_zero_reward_fn, sampling_params
                     )
-                    eval_res = log_evals_on_wandb(evals)
+                    eval_res = log_evals_on_wandb(evals, eval_step=global_eval_step)
 
                     # Append to reward_0 table
                     # for p, r in reward_0:
@@ -237,7 +247,7 @@ if __name__ == '__main__':
         sampling_params
         )
 
-    eval_res = log_evals_on_wandb(evals)
+    eval_res = log_evals_on_wandb(evals, global_eval_step)
     wandb.log({
         "eval_step": global_eval_step,
         **eval_res
