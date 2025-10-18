@@ -32,7 +32,7 @@ def evaluate_vllm(
 
     return reward_and_response_per_prompt
 
-def log_evals_on_wandb(evals):
+def log_evals_on_wandb(evals, eval_step=0):
 
     stat_correct_all = 0
     stat_format_reward_1_answer_reward_0 = 0
@@ -67,9 +67,9 @@ def log_evals_on_wandb(evals):
                 format_reward_0_cases.append(eval)
 
     # collect everything in one dict for easy saving and display
-    stat_correct_all /= len(evals) * 100
-    stat_format_reward_1_answer_reward_0 /= len(evals) * 100
-    stat_format_reward_0_answer_reward_0 /= len(evals) * 100
+    stat_correct_all /= len(evals) * 1/100
+    stat_format_reward_1_answer_reward_0 /= len(evals) * 1/100
+    stat_format_reward_0_answer_reward_0 /= len(evals) * 1/100
 
     results = {
         "stat_correct_all": stat_correct_all,
@@ -80,7 +80,7 @@ def log_evals_on_wandb(evals):
         "reward_1_cases": [('prompt: ' + eval[1], 'response: ' + eval[2]) for eval in reward_1_cases],
     }
 
-    print("\n=== Evaluation Summary ===")
+    print(f"\n=== Evaluation Summary {eval_step} ===")
     pprint.pprint(results)
 
 
@@ -131,8 +131,8 @@ def evalute_results(evals, out_dir="eval_outputs/zero_shot/"):
 
 
     stat_correct_all /= len(evals) * 100
-    stat_format_reward_1_answer_reward_0 /= len(evals) * 100
-    stat_format_reward_0_answer_reward_0 /= len(evals) * 100
+    stat_format_reward_1_answer_reward_0 /= len(evals) * 1/100
+    stat_format_reward_0_answer_reward_0 /= len(evals) * 1/100
 
     results = {
         "stat_correct_all": stat_correct_all,

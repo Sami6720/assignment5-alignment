@@ -67,26 +67,12 @@ if __name__ == '__main__':
     parser.add_argument("--lr", type=float, default=0.0001)
     parser.add_argument("--micro_batch_size", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=1)
-    parser.add_argument("--eval_interval", type=int, default=100)
     parser.add_argument("--job_name", type=str, default='default')
     parser.add_argument("--seed", type=int, default=0)
 
 
 
     args = parser.parse_args()
-
-    wandb.init(
-        entity="doina-precup",
-        project="cs-336-assignment-5",
-        name=args.job_name,
-        mode='online',
-        save_code=True
-    )
-    wandb.define_metric("train_step") # the x‐axis for training 
-    wandb.define_metric("eval_step") # the x‐axis for evaluation
-    wandb.define_metric("train/*", step_metric="train_step")
-    wandb.define_metric("eval/*", step_metric="eval_step")
-
     set_seed(args.seed)
     vllm_set_random_seed(args.seed) # NOTE: Probably not needed.
 
@@ -141,7 +127,7 @@ if __name__ == '__main__':
 
 
     # --- compute how many optimizer steps you'll take ---
-    MAX_VAL_LOGS = 15
+    MAX_VAL_LOGS = 5
     updates_per_epoch = math.ceil(len(datal) / gradient_accumulation_steps)
     total_updates = args.epochs * updates_per_epoch
 
@@ -153,17 +139,34 @@ if __name__ == '__main__':
     )
 
 
-    print("Total updates: ", total_updates)
-    print("Eval update points: ", eval_update_points)
+    print("Eval update points: ", sorted(list(eval_update_points)))
 
     update_step = 0  # counts optimizer.step() calls
 
     # reward_0_table = wandb.Table(columns=["eval_step", "prompt", "response"])
     # format_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
     # reward_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
+
+
+    wandb.init(
+        entity="doina-precup",
+        project="cs-336-assignment-5",
+        name=args.job_name,
+        mode='online',
+        save_code=True,
+        config={**args.__dict__, "total_upadetes": total_updates}
+    )
+
+    wandb.define_metric("train_step") # the x‐axis for training 
+    wandb.define_metric("eval_step") # the x‐axis for evaluation
+    wandb.define_metric("train/*", step_metric="train_step")
+    wandb.define_metric("eval/*", step_metric="eval_step")
+
+
     for epoch in range(args.epochs):
 
         print("Len of datal ", len(datal))
+
 
         for i, d in enumerate(datal):
 
@@ -193,6 +196,7 @@ if __name__ == '__main__':
 
                 # evenly spaced evals (at most 15 during training)
                 if update_step in eval_update_points:
+                    print("Get to logging eval stuff")
                     load_policy_into_vllm_instance(model, llm)
                     evals = evaluate_vllm(
                         llm, eval_data["problems"], eval_data["answers"],
