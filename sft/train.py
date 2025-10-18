@@ -127,7 +127,7 @@ if __name__ == '__main__':
 
 
     # --- compute how many optimizer steps you'll take ---
-    MAX_VAL_LOGS = 5
+    MAX_VAL_LOGS = 15
     updates_per_epoch = math.ceil(len(datal) / gradient_accumulation_steps)
     total_updates = args.epochs * updates_per_epoch
 
@@ -194,7 +194,6 @@ if __name__ == '__main__':
                 optimizer.zero_grad()
 
                 if update_step % 5 == 0:
-                    print("Get to logging training stuff")
                     wandb.log({
                         "train_step": update_step,
                         "train/loss": sum(batch_loss)/len(batch_loss),
@@ -206,7 +205,6 @@ if __name__ == '__main__':
 
                 # evenly spaced evals (at most 15 during training)
                 if update_step in eval_update_points:
-                    print("Get to logging eval stuff")
                     load_policy_into_vllm_instance(model, llm)
                     evals = evaluate_vllm(
                         llm, eval_data["problems"], eval_data["answers"],
