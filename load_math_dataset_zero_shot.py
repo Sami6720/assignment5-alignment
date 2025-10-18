@@ -9,7 +9,7 @@ import pickle
 
 #NOTE: HF_DATASETS_OFFLINE=1 # This needs to be set.
 
-split = 'train'
+split = 'test'
 
 ds = load_dataset(
     "jhn9803/hendrycks-math-with-answers",
