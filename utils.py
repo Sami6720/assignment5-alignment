@@ -71,12 +71,14 @@ def log_evals_on_wandb(evals):
         "eval/correct": stat_correct_all / len(evals),
         "eval/stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0 / len(evals),
         "eval/stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0 / len(evals),
-
     }
 
-    return results
+    return results, [(eval[1], eval[2]) for eval in format_reward_0_cases], [(eval[1],  eval[2]) for eval in format_reward_1_answer_reward_0],
+    [(eval[1],  eval[2]) for eval in reward_1_cases]
 
-def evalute_results(evals):
+
+
+def evalute_results(evals, out_dir="eval_outputs/zero_shot/"):
 
     stat_correct_all = 0
     stat_format_reward_1_answer_reward_0 = 0
@@ -116,19 +118,6 @@ def evalute_results(evals):
     stat_format_reward_1_answer_reward_0 /= len(evals)
     stat_format_reward_0_answer_reward_0 /= len(evals)
 
-    # collect everything in one dict for easy saving and display
-    results = {
-        "stat_correct_all": stat_correct_all,
-        "stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
-        "stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0,
-        "format_reward_0_cases": format_reward_0_cases,
-        "format_reward_1_answer_reward_0": format_reward_1_answer_reward_0,
-    }
-
-    # persist to pickle
-    with open("eval_stats.pkl", "wb") as f:
-        pickle.dump(results, f)
-
     results = {
         "stat_correct_all": stat_correct_all,
         "stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
@@ -157,7 +146,7 @@ def evalute_results(evals):
         ],
     }
 
-    out_dir = "eval_outputs/zero_shot/"
+    # out_dir = "eval_outputs/zero_shot/"
     os.makedirs(out_dir, exist_ok=True)
 
     # --- 1) Persist with pickle ---
@@ -272,6 +261,9 @@ def get_response_log_probs(
     return_token_entropy: bool):
 
     ret = {}
+
+
+    print("input_ids.shape ", input_ids.shape)
 
 
     logits = model(input_ids).logits # Shape B T V
