@@ -68,9 +68,9 @@ def log_evals_on_wandb(evals):
 
     # collect everything in one dict for easy saving and display
     results = {
-        "eval/correct": stat_correct_all,
-        "eval/stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0,
-        "eval/stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0,
+        "eval/correct": stat_correct_all / len(evals),
+        "eval/stat_format_reward_1_answer_reward_0": stat_format_reward_1_answer_reward_0 / len(evals),
+        "eval/stat_format_reward_0_answer_reward_0": stat_format_reward_0_answer_reward_0 / len(evals),
 
     }
 
@@ -109,6 +109,12 @@ def evalute_results(evals):
 
             if len(format_reward_0_cases) <= 10:
                 format_reward_0_cases.append(eval)
+
+
+
+    stat_correct_all /= len(evals)
+    stat_format_reward_1_answer_reward_0 /= len(evals)
+    stat_format_reward_0_answer_reward_0 /= len(evals)
 
     # collect everything in one dict for easy saving and display
     results = {
@@ -205,6 +211,9 @@ def evalute_results(evals):
     print("✅ Saved:")
     print(f" - Pickle: {os.path.join(out_dir, 'eval_stats.pkl')}")
     print(f" - Report: {report_path}")
+
+
+    return report_path
 
 
 def tokenize_prompt_and_outputs(prompt_strs: list[str], output_strs: list[str], tokenizer: PreTrainedTokenizer) -> dict[str, torch.Tensor]:
