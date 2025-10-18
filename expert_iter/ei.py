@@ -15,6 +15,7 @@ import wandb
 import numpy as np
 import random
 import math
+from torch.utils.data import Subset
 
 
 
@@ -69,10 +70,26 @@ if __name__ == '__main__':
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--job_name", type=str, default='default')
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--db_size", type=int, default=0)
 
 
 
     args = parser.parse_args()
+
+    wandb.init(
+        entity="doina-precup",
+        project="cs-336-assignment-5",
+        name=args.job_name,
+        mode='online',
+        save_code=True,
+        config={**args.__dict__ }
+    )
+
+    wandb.define_metric("train_step") # the x‐axis for training 
+    wandb.define_metric("eval_step") # the x‐axis for evaluation
+    wandb.define_metric("train/*", step_metric="train_step")
+    wandb.define_metric("eval/*", step_metric="eval_step")
+
     set_seed(args.seed)
     vllm_set_random_seed(args.seed) # NOTE: Probably not needed.
 
@@ -112,16 +129,21 @@ if __name__ == '__main__':
         random.seed(worker_seed)
     g = torch.Generator()
     g.manual_seed(args.seed)
+
+
+
+
+    #TODO: Create ei dataset here.
+    indices = np.random.randint(0, data.l, size=args.db_size)
+    data_for_loader = Subset(data, indices)
     datal = DataLoader(
-        dataset=data,
+        dataset=data_for_loader,
         shuffle=True,
         batch_size=args.micro_batch_size,
         collate_fn=make_collate_fn(tokenizer),
         worker_init_fn=worker_init_fn,
         generator=g
     )
-
-
     global_training_step = 0
     global_eval_step = 0
 
@@ -148,19 +170,7 @@ if __name__ == '__main__':
     # reward_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
 
 
-    wandb.init(
-        entity="doina-precup",
-        project="cs-336-assignment-5",
-        name=args.job_name,
-        mode='online',
-        save_code=True,
-        config={**args.__dict__, "total_upadetes": total_updates}
-    )
 
-    wandb.define_metric("train_step") # the x‐axis for training 
-    wandb.define_metric("eval_step") # the x‐axis for evaluation
-    wandb.define_metric("train/*", step_metric="train_step")
-    wandb.define_metric("eval/*", step_metric="eval_step")
 
 
     for epoch in range(args.epochs):
