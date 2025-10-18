@@ -21,14 +21,10 @@ from torch.utils.data import Subset
 
 class SftDataset(Dataset):
 
-    def __init__(self, path: str, ):
+    def __init__(self, data):
 
-        with open(path, 'rb') as f:
-
-            preprocessed_data = pickle.load(f)
-
-        self.data = preprocessed_data
-        self.len = len(preprocessed_data["prompt"])
+        self.data = data
+        self.len = len(self.data["prompt"])
 
     def __getitem__(self, index):
 
@@ -94,7 +90,11 @@ if __name__ == '__main__':
     set_seed(args.seed)
     vllm_set_random_seed(args.seed) # NOTE: Probably not needed.
 
-    data = SftDataset('preprocessed_data/MATH/sft/preprocessed_train.pkl')
+    # data_og = SftDataset('preprocessed_data/MATH/sft/preprocessed_train.pkl')
+
+    with open("preprocessed_data/MATH/preprocessed_train.pkl", "rb") as f:
+        data_og = pickle.load(f)
+    
     with open("preprocessed_data/MATH/preprocessed_test.pkl", "rb") as f:
         eval_data = pickle.load(f)
 
@@ -132,6 +132,21 @@ if __name__ == '__main__':
     g.manual_seed(args.seed)
 
 
+    def filter_correct(evals):
+
+        return_ = {"prompt": [], "output_strs": []}
+        for eval in evals:
+
+            reward = eval[0]
+
+            format_reward = reward["format_reward"]
+            answer_reward = reward["answer_reward"]
+            reward = reward["reward"]
+            if reward == 1 and format_reward == 1 and answer_reward == 1:
+                return_["prompt"].append(eval[1])
+                return_["output_strs"].append(eval[2])
+
+        return return_
 
 
     #TODO: Create ei dataset here.
@@ -140,10 +155,20 @@ if __name__ == '__main__':
 
         print(f"Starting trainin for expert_i {expert_iter}")
 
-        indices = np.random.randint(0, data.l, size=args.db_size)
-        data_for_loader = Subset(data, indices)
+        indices = np.random.randint(0, len(data_og), size=args.db_size)
+        load_policy_into_vllm_instance(model, llm)
+        evals = evaluate_vllm(
+            llm, [data_og["problems"][i] for  i in indices], [data_og["answers"][i] for  i in indices],
+            r1_zero_reward_fn, sampling_params
+        )
+        filter_data = SftDataset(filter_correct(evals))
+
+        if filter_data.len <= 1:
+            print("No correct responses in filtered data")
+            break
+
         datal = DataLoader(
-            dataset=data_for_loader,
+            dataset=filter_data,
             shuffle=True,
             batch_size=args.micro_batch_size,
             collate_fn=make_collate_fn(tokenizer),
