@@ -14,7 +14,7 @@ from transformers.models.qwen2.modeling_qwen2 import Qwen2ForCausalLM
 import wandb
 import numpy as np
 import random
-
+import math
 
 
 
@@ -204,8 +204,8 @@ if __name__ == '__main__':
 
 
 
-    model.save_pretrained(save_directory=f"models/{args.job_name}/final/")
-    tokenizer.save_pretrained(save_directory=f"models/{args.job_name}/final/")
+    model.save_pretrained(save_directory=f"models/sft/{args.job_name}/final/")
+    tokenizer.save_pretrained(save_directory=f"models/sft/{args.job_name}/final/")
 
 
     load_policy_into_vllm_instance(model, llm)
