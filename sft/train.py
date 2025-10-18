@@ -110,13 +110,6 @@ if __name__ == '__main__':
     )
 
 
-    load_policy_into_vllm_instance(model, llm)
-    evals = evaluate_vllm(
-        llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
-        sampling_params
-    )
-    report_path = evalute_results(evals)
-
     assert args.batch_size % args.micro_batch_size == 0
 
     gradient_accumulation_steps = args.batch_size // args.micro_batch_size
