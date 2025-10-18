@@ -140,6 +140,19 @@ if __name__ == '__main__':
     global_eval_step = 0
 
 
+    # --- compute how many optimizer steps you'll take ---
+    MAX_VAL_LOGS = 15
+    updates_per_epoch = math.ceil(len(datal) / gradient_accumulation_steps)
+    total_updates = args.epochs * updates_per_epoch
+
+    # choose up to 15 evenly spaced update indices: 0..total_updates-1
+    eval_update_points = set(
+        np.linspace(0, max(total_updates - 1, 0),
+                    num=min(MAX_VAL_LOGS, total_updates),
+                    dtype=int).tolist()
+    )
+
+    update_step = 0  # counts optimizer.step() calls
     for epoch in range(args.epochs):
 
         print("Len of datal ", len(datal))
@@ -170,23 +183,21 @@ if __name__ == '__main__':
                 optimizer.step()
                 optimizer.zero_grad()
 
-
-            if (i+1) % args.eval_interval == 0:
-                #TODO: Also save best eval model.
-                load_policy_into_vllm_instance(model, llm)
-                evals = evaluate_vllm(
-                    llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
-                    sampling_params
+                # evenly spaced evals (at most 15 during training)
+                if update_step in eval_update_points:
+                    load_policy_into_vllm_instance(model, llm)
+                    evals = evaluate_vllm(
+                        llm, eval_data["problems"], eval_data["answers"],
+                        r1_zero_reward_fn, sampling_params
                     )
+                    eval_res, reward_0, format_1, reward_1 = log_evals_on_wandb(evals)
+                    reward_0 = wandb.Table(columns=["prompt", "response"], data=reward_0)
+                    format_1 = wandb.Table(columns=["prompt", "response"], data=format_1)
+                    reward_1 = wandb.Table(columns=["prompt", "response"], data=reward_1)
+                    wandb.log({"eval_step": global_eval_step, **eval_res, "reward_0_cases": reward_0, "reward_1_cases": reward_1, "format_1_cases": format_1})
+                    global_eval_step += 1
 
-                eval_res = log_evals_on_wandb(evals)
-                wandb.log({
-                    "eval_step": global_eval_step,
-                    **eval_res
-                })
-                global_eval_step += 1
-
-
+                update_step += 1
 
             # evaluate_vllm(
             global_training_step += 1
@@ -203,10 +214,10 @@ if __name__ == '__main__':
         sampling_params
         )
 
-    eval_res = log_evals_on_wandb(evals)
+    eval_res, reward_0, format_1, reward_1 = log_evals_on_wandb(evals)
     wandb.log({
         "eval_step": global_eval_step,
         **eval_res
     })
-    report_path = evalute_results(evals)
+    report_path = evalute_results(evals, f"eval_outputs/sft/{args.job_name}")
     wandb.save(report_path)
