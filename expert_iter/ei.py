@@ -71,6 +71,7 @@ if __name__ == '__main__':
     parser.add_argument("--job_name", type=str, default='default')
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--db_size", type=int, default=0)
+    parser.add_argument("--num_of_ei", type=int, default=2)
 
 
 
@@ -134,133 +135,138 @@ if __name__ == '__main__':
 
 
     #TODO: Create ei dataset here.
-    indices = np.random.randint(0, data.l, size=args.db_size)
-    data_for_loader = Subset(data, indices)
-    datal = DataLoader(
-        dataset=data_for_loader,
-        shuffle=True,
-        batch_size=args.micro_batch_size,
-        collate_fn=make_collate_fn(tokenizer),
-        worker_init_fn=worker_init_fn,
-        generator=g
-    )
-    global_training_step = 0
-    global_eval_step = 0
+
+    for expert_iter in range(args.num_of_ei):
+
+        print(f"Starting trainin for expert_i {expert_iter}")
+
+        indices = np.random.randint(0, data.l, size=args.db_size)
+        data_for_loader = Subset(data, indices)
+        datal = DataLoader(
+            dataset=data_for_loader,
+            shuffle=True,
+            batch_size=args.micro_batch_size,
+            collate_fn=make_collate_fn(tokenizer),
+            worker_init_fn=worker_init_fn,
+            generator=g
+        )
+        global_training_step = 0
+        global_eval_step = 0
 
 
-    # --- compute how many optimizer steps you'll take ---
-    MAX_VAL_LOGS = 15
-    updates_per_epoch = math.ceil(len(datal) / gradient_accumulation_steps)
-    total_updates = args.epochs * updates_per_epoch
+        # --- compute how many optimizer steps you'll take ---
+        MAX_VAL_LOGS = 3
+        updates_per_epoch = math.ceil(len(datal) / gradient_accumulation_steps)
+        total_updates = args.epochs * updates_per_epoch
 
-    # choose up to 15 evenly spaced update indices: 0..total_updates-1
-    eval_update_points = set(
-        np.linspace(0, max(total_updates - 1, 0),
-                    num=min(MAX_VAL_LOGS, total_updates),
-                    dtype=int).tolist()
-    )
-
-
-    print("Eval update points: ", sorted(list(eval_update_points)))
-
-    update_step = 0  # counts optimizer.step() calls
-
-    # reward_0_table = wandb.Table(columns=["eval_step", "prompt", "response"])
-    # format_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
-    # reward_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
-
-
-
-
-
-    for epoch in range(args.epochs):
-
-        print("Len of datal ", len(datal))
-
-        batch_loss = []
-        batch_token_entropy = []
-
-        for i, d in enumerate(datal):
-
-
-            input_ids = d['input_ids'].to(training_device)
-            labels = d['labels'].to(training_device)
-            response_mask = d['response_mask'].to(training_device)
-
-
-            ret =  get_response_log_probs(model, input_ids, labels, return_token_entropy=True)
-            log_probs = ret["log_probs"]
-            token_entropy = ret["token_entropy"]
-
-            loss, meta_data = sft_microbatch_train_step(log_probs, response_mask, gradient_accumulation_steps=gradient_accumulation_steps)
-
-            batch_loss.append(loss)
-            batch_token_entropy.append((response_mask * token_entropy).mean().item())
-
-
-            if (i + 1) % gradient_accumulation_steps == 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-                optimizer.step()
-                optimizer.zero_grad()
-
-                if update_step % 5 == 0:
-                    print("Get to logging training stuff")
-                    wandb.log({
-                        "train_step": update_step,
-                        "train/loss": sum(batch_loss)/len(batch_loss),
-                        "train/response_mean_token_entropy": sum(batch_token_entropy)/len(batch_token_entropy)
-                    })
-
-                batch_loss = [] # Reset batch loss.
-                batch_token_entropy = [] 
-
-                # evenly spaced evals (at most 15 during training)
-                if update_step in eval_update_points:
-                    print("Get to logging eval stuff")
-                    load_policy_into_vllm_instance(model, llm)
-                    evals = evaluate_vllm(
-                        llm, eval_data["problems"], eval_data["answers"],
-                        r1_zero_reward_fn, sampling_params
-                    )
-                    eval_res = log_evals_on_wandb(evals, eval_step=global_eval_step)
-
-                    # Append to reward_0 table
-                    # for p, r in reward_0:
-                    #         reward_0_table.add_data(global_eval_step, p, r)
-                    #
-                    # # Append to format_1 table
-                    # for p, r in format_1:
-                    #         format_1_table.add_data(global_eval_step, p, r)
-                    #
-                    # # Append to reward_1 table
-                    # for p, r in reward_1:
-                    #         reward_1_table.add_data(global_eval_step, p, r)
-
-                    # wandb.log({"eval_step": global_eval_step, **eval_res, "reward_0_cases": reward_0_table, "reward_1_cases": reward_1_table, "format_1_cases": format_1_table})
-                    wandb.log({"eval_step": global_eval_step, **eval_res})
-                    global_eval_step += 1
-
-                update_step += 1
-
-            # evaluate_vllm(
-            global_training_step += 1
-
-
-
-    model.save_pretrained(save_directory=f"models/sft/{args.job_name}/final/")
-    tokenizer.save_pretrained(save_directory=f"models/sft/{args.job_name}/final/")
-
-
-    load_policy_into_vllm_instance(model, llm)
-    evals = evaluate_vllm(
-        llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
-        sampling_params
+        # choose up to 15 evenly spaced update indices: 0..total_updates-1
+        eval_update_points = set(
+            np.linspace(0, max(total_updates - 1, 0),
+                        num=min(MAX_VAL_LOGS, total_updates),
+                        dtype=int).tolist()
         )
 
-    eval_res = log_evals_on_wandb(evals, global_eval_step)
-    wandb.log({
-        "eval_step": global_eval_step,
-        **eval_res
-    })
-    report_path = evalute_results(evals, f"eval_outputs/sft/{args.job_name}")
-    wandb.save(report_path)
+
+        print("Eval update points: ", sorted(list(eval_update_points)))
+
+        update_step = 0  # counts optimizer.step() calls
+
+        # reward_0_table = wandb.Table(columns=["eval_step", "prompt", "response"])
+        # format_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
+        # reward_1_table = wandb.Table(columns=["eval_step", "prompt", "response"])
+
+
+
+
+
+        print("Len of datal ", len(datal), "for ei: ", expert_iter)
+        for epoch in range(args.epochs):
+
+
+            batch_loss = []
+            batch_token_entropy = []
+
+            for i, d in enumerate(datal):
+
+
+                input_ids = d['input_ids'].to(training_device)
+                labels = d['labels'].to(training_device)
+                response_mask = d['response_mask'].to(training_device)
+
+
+                ret =  get_response_log_probs(model, input_ids, labels, return_token_entropy=True)
+                log_probs = ret["log_probs"]
+                token_entropy = ret["token_entropy"]
+
+                loss, meta_data = sft_microbatch_train_step(log_probs, response_mask, gradient_accumulation_steps=gradient_accumulation_steps)
+
+                batch_loss.append(loss)
+                batch_token_entropy.append((response_mask * token_entropy).mean().item())
+
+
+                if (i + 1) % gradient_accumulation_steps == 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                    if update_step % 5 == 0:
+                        print("Get to logging training stuff")
+                        wandb.log({
+                            "train_step": update_step,
+                            "train/loss": sum(batch_loss)/len(batch_loss),
+                            "train/response_mean_token_entropy": sum(batch_token_entropy)/len(batch_token_entropy)
+                        })
+
+                    batch_loss = [] # Reset batch loss.
+                    batch_token_entropy = [] 
+
+                    # evenly spaced evals (at most 15 during training)
+                    if update_step in eval_update_points:
+                        print("Get to logging eval stuff")
+                        load_policy_into_vllm_instance(model, llm)
+                        evals = evaluate_vllm(
+                            llm, eval_data["problems"], eval_data["answers"],
+                            r1_zero_reward_fn, sampling_params
+                        )
+                        eval_res = log_evals_on_wandb(evals, eval_step=global_eval_step)
+
+                        # Append to reward_0 table
+                        # for p, r in reward_0:
+                        #         reward_0_table.add_data(global_eval_step, p, r)
+                        #
+                        # # Append to format_1 table
+                        # for p, r in format_1:
+                        #         format_1_table.add_data(global_eval_step, p, r)
+                        #
+                        # # Append to reward_1 table
+                        # for p, r in reward_1:
+                        #         reward_1_table.add_data(global_eval_step, p, r)
+
+                        # wandb.log({"eval_step": global_eval_step, **eval_res, "reward_0_cases": reward_0_table, "reward_1_cases": reward_1_table, "format_1_cases": format_1_table})
+                        wandb.log({"eval_step": global_eval_step, **eval_res})
+                        global_eval_step += 1
+
+                    update_step += 1
+
+                # evaluate_vllm(
+                global_training_step += 1
+
+
+
+        model.save_pretrained(save_directory=f"models/sft/{args.job_name}/final/")
+        tokenizer.save_pretrained(save_directory=f"models/sft/{args.job_name}/final/")
+
+
+        load_policy_into_vllm_instance(model, llm)
+        evals = evaluate_vllm(
+            llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
+            sampling_params
+            )
+
+        eval_res = log_evals_on_wandb(evals, global_eval_step)
+        wandb.log({
+            "eval_step": global_eval_step,
+            **eval_res
+        })
+        report_path = evalute_results(evals, f"eval_outputs/sft/{args.job_name}")
+        wandb.save(report_path)
