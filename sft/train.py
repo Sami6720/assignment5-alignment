@@ -186,7 +186,7 @@ if __name__ == '__main__':
             loss, meta_data = sft_microbatch_train_step(log_probs, response_mask, gradient_accumulation_steps=gradient_accumulation_steps)
 
             batch_loss.append(loss)
-            batch_token_entropy.append((response_mask * token_entropy).mean().item())
+            batch_token_entropy.append(((response_mask * token_entropy).sum(-1)/response_mask.sum(-1)).mean().item())
 
 
             if (i + 1) % gradient_accumulation_steps == 0:
