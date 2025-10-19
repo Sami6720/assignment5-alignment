@@ -341,6 +341,7 @@ def sft_microbatch_train_step(
     B, T = policy_log_probs.shape
     #
     summed_log_nll = -1 * masked_normalize(policy_log_probs, response_mask, -1, normalize_constant)
+    summed_log_nll = summed_log_nll / response_mask.sum(dim=-1)
     # # loss.sum().backward()
     # #
     # # return loss.sum(), {"gradient_accumulation_steps": gradient_accumulation_steps + 1}
