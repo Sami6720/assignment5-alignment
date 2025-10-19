@@ -69,6 +69,7 @@ if __name__ == '__main__':
     parser.add_argument("--epochs", type=int, default=1)
     parser.add_argument("--job_name", type=str, default='default')
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--d_size", type=int, default=256)
 
 
 
@@ -76,7 +77,7 @@ if __name__ == '__main__':
     set_seed(args.seed)
     vllm_set_random_seed(args.seed) # NOTE: Probably not needed.
 
-    data = SftDataset('preprocessed_data/MATH/sft/preprocessed_train.pkl')
+    data = SftDataset('preprocessed_data/MATH/sft/preprocessed_train.pkl')[:args.d_size]
     with open("preprocessed_data/MATH/preprocessed_test.pkl", "rb") as f:
         eval_data = pickle.load(f)
 
