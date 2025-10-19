@@ -190,6 +190,13 @@ if __name__ == '__main__':
 
             if (i + 1) % gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+                total_norm = 0.0
+                for p in model.parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.data.norm(2)
+                        total_norm += param_norm.item() ** 2
+                total_norm = total_norm ** 0.5
+
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -197,7 +204,8 @@ if __name__ == '__main__':
                     wandb.log({
                         "train_step": update_step,
                         "train/loss": sum(batch_loss)/len(batch_loss),
-                        "train/response_mean_token_entropy": sum(batch_token_entropy)/len(batch_token_entropy)
+                        "train/response_mean_token_entropy": sum(batch_token_entropy)/len(batch_token_entropy),
+                        "train/grad_norm": total_norm
                     })
 
                 batch_loss = [] # Reset batch loss.
