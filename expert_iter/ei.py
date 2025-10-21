@@ -155,7 +155,7 @@ if __name__ == '__main__':
 
         print(f"Starting trainin for expert_i {expert_iter}")
 
-        indices = np.random.randint(0, len(data_og), size=args.db_size)
+        indices = np.random.randint(0, len(data_og['problems']), size=args.db_size)
         load_policy_into_vllm_instance(model, llm)
         evals = evaluate_vllm(
             llm, [data_og["problems"][i] for  i in indices], [data_og["answers"][i] for  i in indices],
@@ -163,7 +163,7 @@ if __name__ == '__main__':
         )
         filter_data = SftDataset(filter_correct(evals))
 
-        if filter_data.len <= 1:
+        if filter_data.len < 1:
             print("No correct responses in filtered data")
             break
 
@@ -278,20 +278,20 @@ if __name__ == '__main__':
 
 
 
-        model.save_pretrained(save_directory=f"models/sft/{args.job_name}/final/")
-        tokenizer.save_pretrained(save_directory=f"models/sft/{args.job_name}/final/")
+    model.save_pretrained(save_directory=f"models/ei/{args.job_name}/final/")
+    tokenizer.save_pretrained(save_directory=f"models/ei/{args.job_name}/final/")
 
 
-        load_policy_into_vllm_instance(model, llm)
-        evals = evaluate_vllm(
-            llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
-            sampling_params
-            )
+    load_policy_into_vllm_instance(model, llm)
+    evals = evaluate_vllm(
+        llm, eval_data["problems"], eval_data["answers"], r1_zero_reward_fn,
+        sampling_params
+        )
 
-        eval_res = log_evals_on_wandb(evals, global_eval_step)
-        wandb.log({
-            "eval_step": global_eval_step,
-            **eval_res
-        })
-        report_path = evalute_results(evals, f"eval_outputs/sft/{args.job_name}")
-        wandb.save(report_path)
+    eval_res = log_evals_on_wandb(evals, global_eval_step)
+    wandb.log({
+        "eval_step": global_eval_step,
+        **eval_res
+    })
+    report_path = evalute_results(evals, f"eval_outputs/ei/{args.job_name}")
+    wandb.save(report_path)
