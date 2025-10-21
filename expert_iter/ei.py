@@ -150,6 +150,8 @@ if __name__ == '__main__':
 
 
     #TODO: Create ei dataset here.
+    global_training_step = 0
+    global_eval_step = 0
 
     for expert_iter in range(args.num_of_ei):
 
@@ -161,6 +163,8 @@ if __name__ == '__main__':
             llm, [data_og["problems"][i] for  i in indices], [data_og["answers"][i] for  i in indices],
             r1_zero_reward_fn, sampling_params
         )
+        eval_res = log_evals_on_wandb(evals, eval_step=global_eval_step)
+        wandb.log({"eval_step": global_eval_step, **eval_res})
         filter_data = SftDataset(filter_correct(evals))
 
         if filter_data.len < 1:
@@ -175,8 +179,6 @@ if __name__ == '__main__':
             worker_init_fn=worker_init_fn,
             generator=g
         )
-        global_training_step = 0
-        global_eval_step = 0
 
 
         # --- compute how many optimizer steps you'll take ---
