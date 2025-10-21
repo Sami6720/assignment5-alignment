@@ -130,7 +130,7 @@ def evalute_results(evals, out_dir="eval_outputs/zero_shot/"):
 
 
 
-    stat_correct_all /= len(evals) * 100
+    stat_correct_all /= len(evals) * 1/100
     stat_format_reward_1_answer_reward_0 /= len(evals) * 1/100
     stat_format_reward_0_answer_reward_0 /= len(evals) * 1/100
 
